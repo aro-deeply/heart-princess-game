@@ -31,6 +31,14 @@
   #mute { position: fixed; top: 14px; right: 14px; width: 60px; height: 60px; border-radius: 50%;
     border: 4px solid #fff; background: rgba(255, 159, 208, .9); font-size: 28px; cursor: pointer;
     box-shadow: 0 4px 12px rgba(214, 51, 132, .35); }
+  #confirm { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(90, 40, 120, .45); padding: 16px; z-index: 10; }
+  #confirm .box { background: #fff; border: 6px solid #ffb3dc; border-radius: 32px; padding: 28px 24px;
+    max-width: 440px; width: 100%; text-align: center; box-shadow: 0 16px 40px rgba(120, 40, 120, .4); }
+  #confirm .msg { font-size: clamp(26px, 4vw, 36px); color: #ff4f9e; line-height: 1.3; }
+  #confirm .sub { font-size: clamp(17px, 2.4vw, 22px); color: #9b6bff; margin: 10px 0 22px; }
+  #confirm .row { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  #confirm .btn { animation: none; font-size: clamp(24px, 4vw, 38px); }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -44,6 +52,16 @@
   <button id="againBtn" class="btn small hidden">처음부터 ♥</button>
 </div>
 <button id="mute" title="소리 켜기/끄기">🔊</button>
+<div id="confirm" class="hidden">
+  <div class="box">
+    <div class="msg">처음부터 다시 할까요?</div>
+    <div class="sub">지금까지 모은 선물과 별 스티커가 사라져요</div>
+    <div class="row">
+      <button id="noBtn" class="btn">아니요, 계속할래요</button>
+      <button id="yesBtn" class="btn small">네, 처음부터</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const cv = document.getElementById('c');
@@ -363,7 +381,18 @@ function startLevel() {
   setState('play'); sfxStart();
 }
 function newGame() { level = 0; have = 0; stickers = 0; clearSave(); startLevel(); }
-startBtn.onclick = () => { initAudio(); sfxClick(); newGame(); say(CHAPTER_SAY[0]); };
+// 처음부터: 저장된 진행이 있으면 한 번 더 물어봄
+const confirmBox = document.getElementById('confirm');
+let onConfirmYes = null;
+function askReset(yes) {
+  if (!saved || saved.level <= 0) { yes(); return; }
+  onConfirmYes = yes; confirmBox.classList.remove('hidden');
+  say('처음부터 다시 할까요?');
+}
+function closeConfirm() { confirmBox.classList.add('hidden'); onConfirmYes = null; }
+document.getElementById('noBtn').onclick = () => { initAudio(); sfxClick(); closeConfirm(); };
+document.getElementById('yesBtn').onclick = () => { initAudio(); sfxClick(); const f = onConfirmYes; closeConfirm(); if (f) f(); };
+startBtn.onclick = () => { initAudio(); sfxClick(); askReset(() => { newGame(); say(CHAPTER_SAY[0]); }); };
 contBtn.onclick = () => {
   initAudio(); sfxClick();
   level = saved.level; have = Math.min(TOTAL, saved.have | 0); stickers = saved.stickers | 0;
@@ -381,7 +410,7 @@ nextBtn.onclick = () => {
   }
 };
 moreBtn.onclick = () => { initAudio(); sfxClick(); level = TOTAL; startLevel(); say('이제 별 스티커를 모아 볼까요?'); };
-againBtn.onclick = () => { initAudio(); sfxClick(); newGame(); say('한 번 더 해 볼까요?'); };
+againBtn.onclick = () => { initAudio(); sfxClick(); askReset(() => { newGame(); say('한 번 더 해 볼까요?'); }); };
 muteBtn.onclick = () => {
   muted = !muted; muteBtn.textContent = muted ? '🔇' : '🔊';
   if (master) master.gain.value = muted ? 0 : 0.6;
@@ -393,6 +422,11 @@ addEventListener('touchstart', onTouch, { passive: true });
 addEventListener('touchmove', onTouch, { passive: true });
 addEventListener('keydown', e => {
   keys[e.key] = true;
+  // 확인창이 열려 있으면 Enter·Space·Esc는 안전한 "아니요"
+  if (!confirmBox.classList.contains('hidden')) {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') { closeConfirm(); e.preventDefault(); }
+    return;
+  }
   if (e.key === 'Enter' || e.key === ' ') {
     const b = ALL_BTNS.find(x => !x.classList.contains('hidden'));
     if (b) { b.click(); e.preventDefault(); }
